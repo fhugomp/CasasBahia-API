@@ -13,92 +13,79 @@ api = Blueprint('api', __name__)
 def get_clientes():
     """Retorna todos os clientes cadastrados."""
     conn = get_db_connection()
-    if conn:
-        cur = conn.cursor()
-        cur.execute('SELECT * FROM cadeiraextensao.clientes;')
-        clientes = cur.fetchall()
-        cur.close()
-        conn.close()
-        # Converte o resultado para uma lista de dicionários
-        return jsonify([dict(zip([desc[0] for desc in cur.description], row)) for row in clientes])
-    return jsonify({"error": "Database connection failed"}), 500
+    if not conn:
+        return jsonify({"error": "Database connection failed"}), 500
 
-@api.route('/clientes/<int:id>', methods=['GET'])
-def get_cliente(id):
+    cur = conn.cursor()
+    cur.execute('SELECT * FROM cadeiraextensao.clientes;')
+    
+    colunas = [desc[0] for desc in cur.description]
+    clientes_com_objetos = [dict(zip(colunas, row)) for row in cur.fetchall()]
+    cur.close()
+    conn.close()
+
+    # CORREÇÃO: Adicionando a conversão manual para o tipo Decimal do GPS
+    clientes_serializaveis = []
+    for cliente in clientes_com_objetos:
+        for key, value in cliente.items():
+            if isinstance(value, Decimal):
+                cliente[key] = float(value)
+        clientes_serializaveis.append(cliente)
+    
+    return jsonify(clientes_serializaveis)
+
+
+@api.route('/clientes/<int:cliente_id>', methods=['GET'])
+def get_cliente(cliente_id): # CORREÇÃO: Padronizando o nome do parâmetro
     """Retorna um cliente específico pelo seu ID."""
-    conn = get_db_connection()
-    if conn:
-        cur = conn.cursor()
-        cur.execute('SELECT * FROM cadeiraextensao.clientes WHERE cliente_id = %s;', (id,))
-        cliente = cur.fetchone()
-        cur.close()
-        conn.close()
-        if cliente:
-            return jsonify(dict(zip([desc[0] for desc in cur.description], cliente)))
-        return jsonify({"message": "Cliente não encontrado"}), 404
-    return jsonify({"error": "Database connection failed"}), 500
-
-@api.route('/clientes', methods=['POST'])
-def add_cliente():
-    """Adiciona um novo cliente."""
-    novo_cliente = request.get_json()
-    # Adicione validação dos dados recebidos aqui
-    conn = get_db_connection()
-    if conn:
-        cur = conn.cursor()
-        cur.execute('INSERT INTO cadeiraextensao.clientes (nome, endereco, gps) VALUES (%s, %s, %s) RETURNING id;',
-                    (novo_cliente['nome'], novo_cliente['endereco'], novo_cliente['gps']))
-        new_id = cur.fetchone()[0]
-        conn.commit()
-        cur.close()
-        conn.close()
-        return jsonify({"message": "Cliente adicionado com sucesso", "id": new_id}), 201
-    return jsonify({"error": "Database connection failed"}), 500
-
-@api.route('/clientes/<int:cliente_id>', methods=['PUT'])
-def update_cliente(cliente_id):
-    """Atualiza os dados de um cliente existente."""
-    dados_cliente = request.get_json()
     conn = get_db_connection()
     if not conn:
         return jsonify({"error": "Database connection failed"}), 500
 
     cur = conn.cursor()
-    # Usando os nomes corretos das colunas do seu banco de dados
-    cur.execute(
-        """
-        UPDATE cadeiraextensao.clientes 
-        SET nome_cliente = %s, 
-            endereco_cliente = %s, 
-            gps_latitude_cliente = %s,
-            gps_longitude_cliente = %s,
-            telefone_cliente = %s,
-            email_cliente = %s
-        WHERE cliente_id = %s;
-        """,
-        (
-            dados_cliente['nome_cliente'], 
-            dados_cliente['endereco_cliente'],
-            dados_cliente['gps_latitude_cliente'],
-            dados_cliente['gps_longitude_cliente'],
-            dados_cliente['telefone_cliente'],
-            dados_cliente['email_cliente'],
-            cliente_id
-        )
-    )
+    # Usando o nome correto da coluna 'cliente_id'
+    cur.execute('SELECT * FROM cadeiraextensao.clientes WHERE cliente_id = %s;', (cliente_id,))
     
-    updated_rows = cur.rowcount
-    conn.commit()
+    cliente_obj = cur.fetchone()
     cur.close()
     conn.close()
 
-    if updated_rows > 0:
-        return jsonify({"message": f"Cliente {cliente_id} atualizado com sucesso."})
+    if cliente_obj:
+        colunas = [desc[0] for desc in cur.description]
+        cliente_dict = dict(zip(colunas, cliente_obj))
+        # CORREÇÃO: Adicionando a conversão manual
+        for key, value in cliente_dict.items():
+            if isinstance(value, Decimal):
+                cliente_dict[key] = float(value)
+        return jsonify(cliente_dict)
+        
     return jsonify({"message": "Cliente não encontrado"}), 404
 
 
-@api.route('/clientes/<int:cliente_id>', methods=['DELETE'])
-def delete_cliente(cliente_id):
+@api.route('/clientes', methods=['POST'])
+def add_cliente():
+    """Adiciona um novo cliente."""
+    novo_cliente = request.get_json()
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"error": "Database connection failed"}), 500
+
+    cur = conn.cursor()
+    # CORREÇÃO: Usando os nomes corretos das colunas e RETURNING
+    cur.execute(
+        'INSERT INTO cadeiraextensao.clientes (nome_cliente, endereco_cliente, gps_latitude_cliente, gps_longitude_cliente, telefone_cliente, email_cliente) VALUES (%s, %s, %s, %s, %s, %s) RETURNING cliente_id;',
+        (novo_cliente['nome_cliente'], novo_cliente['endereco_cliente'], novo_cliente['gps_latitude_cliente'], novo_cliente['gps_longitude_cliente'], novo_cliente.get('telefone_cliente'), novo_cliente.get('email_cliente'))
+    )
+    new_id = cur.fetchone()[0]
+    conn.commit()
+    cur.close()
+    conn.close()
+    return jsonify({"message": "Cliente adicionado com sucesso", "id": new_id}), 201
+
+# As suas funções update_cliente e delete_cliente já estavam corretas e não precisam de mudança.
+# Apenas certifique-se de que elas estão presentes após o código acima.
+@api.route('/clientes/<int:cliente_id>', methods=['PUT'])
+def update_cliente(cliente_id):
     """Apaga um cliente e suas entregas associadas."""
     conn = get_db_connection()
     if not conn:
