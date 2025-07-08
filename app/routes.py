@@ -24,7 +24,7 @@ def get_clientes():
     cur.close()
     conn.close()
 
-    # CORREÇÃO: Adicionando a conversão manual para o tipo Decimal do GPS
+    # Adicionando a conversão manual para o tipo Decimal do GPS
     clientes_serializaveis = []
     for cliente in clientes_com_objetos:
         for key, value in cliente.items():
@@ -36,7 +36,7 @@ def get_clientes():
 
 
 @api.route('/clientes/<int:cliente_id>', methods=['GET'])
-def get_cliente(cliente_id): # CORREÇÃO: Padronizando o nome do parâmetro
+def get_cliente(cliente_id): # Padronizando o nome do parâmetro
     """Retorna um cliente específico pelo seu ID."""
     conn = get_db_connection()
     if not conn:
@@ -71,7 +71,7 @@ def add_cliente():
         return jsonify({"error": "Database connection failed"}), 500
 
     cur = conn.cursor()
-    # CORREÇÃO: Usando os nomes corretos das colunas e RETURNING
+    # Usando os nomes corretos das colunas e RETURNING
     cur.execute(
         'INSERT INTO cadeiraextensao.clientes (nome_cliente, endereco_cliente, gps_latitude_cliente, gps_longitude_cliente, telefone_cliente, email_cliente) VALUES (%s, %s, %s, %s, %s, %s) RETURNING cliente_id;',
         (novo_cliente['nome_cliente'], novo_cliente['endereco_cliente'], novo_cliente['gps_latitude_cliente'], novo_cliente['gps_longitude_cliente'], novo_cliente.get('telefone_cliente'), novo_cliente.get('email_cliente'))
@@ -82,8 +82,7 @@ def add_cliente():
     conn.close()
     return jsonify({"message": "Cliente adicionado com sucesso", "id": new_id}), 201
 
-# As suas funções update_cliente e delete_cliente já estavam corretas e não precisam de mudança.
-# Apenas certifique-se de que elas estão presentes após o código acima.
+
 @api.route('/clientes/<int:cliente_id>', methods=['PUT'])
 def update_cliente(cliente_id):
     """Apaga um cliente e suas entregas associadas."""
