@@ -44,7 +44,7 @@ def get_clientes():
     cur.close()
     conn.close()
 
-    # Adicionando a conversão manual para o tipo Decimal do GPS
+    # Conversão manual para o tipo Decimal do GPS para evitar erros
     clientes_serializaveis = []
     for cliente in clientes_com_objetos:
         for key, value in cliente.items():
@@ -53,33 +53,6 @@ def get_clientes():
         clientes_serializaveis.append(cliente)
     
     return jsonify(clientes_serializaveis)
-
-
-@api.route('/clientes/<int:cliente_id>', methods=['GET'])
-def get_cliente(cliente_id): # Padronizando o nome do parâmetro
-    """Retorna um cliente específico pelo seu ID."""
-    conn = get_db_connection()
-    if not conn:
-        return jsonify({"error": "Database connection failed"}), 500
-
-    cur = conn.cursor()
-    # Usando o nome correto da coluna 'cliente_id'
-    cur.execute('SELECT * FROM cadeiraextensao.clientes WHERE cliente_id = %s;', (cliente_id,))
-    
-    cliente_obj = cur.fetchone()
-    cur.close()
-    conn.close()
-
-    if cliente_obj:
-        colunas = [desc[0] for desc in cur.description]
-        cliente_dict = dict(zip(colunas, cliente_obj))
-        # CORREÇÃO: Adicionando a conversão manual
-        for key, value in cliente_dict.items():
-            if isinstance(value, Decimal):
-                cliente_dict[key] = float(value)
-        return jsonify(cliente_dict)
-        
-    return jsonify({"message": "Cliente não encontrado"}), 404
 
 
 @api.route('/clientes', methods=['POST'])
@@ -91,7 +64,6 @@ def add_cliente():
         return jsonify({"error": "Database connection failed"}), 500
 
     cur = conn.cursor()
-    # Usando os nomes corretos das colunas e RETURNING
     cur.execute(
         'INSERT INTO cadeiraextensao.clientes (nome_cliente, endereco_cliente, gps_latitude_cliente, gps_longitude_cliente, telefone_cliente, email_cliente) VALUES (%s, %s, %s, %s, %s, %s) RETURNING cliente_id;',
         (novo_cliente['nome_cliente'], novo_cliente['endereco_cliente'], novo_cliente['gps_latitude_cliente'], novo_cliente['gps_longitude_cliente'], novo_cliente.get('telefone_cliente'), novo_cliente.get('email_cliente'))
@@ -102,29 +74,74 @@ def add_cliente():
     conn.close()
     return jsonify({"message": "Cliente adicionado com sucesso", "id": new_id}), 201
 
-
-@api.route('/clientes/<int:cliente_id>', methods=['PUT'])
-def update_cliente(cliente_id):
-    """Apaga um cliente e suas entregas associadas."""
+@api.route('/clientes/<int:cliente_id>', methods=['GET', 'PUT', 'DELETE'])
+def handle_cliente(cliente_id):
     conn = get_db_connection()
     if not conn:
         return jsonify({"error": "Database connection failed"}), 500
-
+    
     cur = conn.cursor()
-    # Por segurança, primeiro apagamos as 'entregas' que dependem deste cliente
-    cur.execute('DELETE FROM cadeiraextensao.entregas WHERE cliente_id = %s;', (cliente_id,))
-    
-    # Em seguida, apagamos o cliente
-    cur.execute('DELETE FROM cadeiraextensao.clientes WHERE cliente_id = %s;', (cliente_id,))
-    
-    updated_rows = cur.rowcount
-    conn.commit()
-    cur.close()
-    conn.close()
 
-    if updated_rows > 0:
-        return jsonify({"message": f"Cliente {cliente_id} e suas dependências foram apagados com sucesso."})
-    return jsonify({"message": "Cliente não encontrado"}), 404
+    # --- LÓGICA PARA O MÉTODO GET ---
+    if request.method == 'GET':
+        cur.execute('SELECT * FROM cadeiraextensao.clientes WHERE cliente_id = %s;', (cliente_id,))
+        cliente_obj = cur.fetchone()
+        cur.close()
+        conn.close()
+
+        if cliente_obj:
+            colunas = [desc[0] for desc in cur.description]
+            cliente_dict = dict(zip(colunas, cliente_obj))
+            for key, value in cliente_dict.items():
+                if isinstance(value, Decimal):
+                    cliente_dict[key] = float(value)
+            return jsonify(cliente_dict)
+        else:
+            return jsonify({"message": "Cliente não encontrado"}), 404
+
+    # --- LÓGICA PARA O MÉTODO PUT ---
+    elif request.method == 'PUT':
+        dados_cliente = request.get_json()
+        cur.execute(
+            """
+            UPDATE cadeiraextensao.clientes 
+            SET nome_cliente = %s, endereco_cliente = %s, gps_latitude_cliente = %s,
+                gps_longitude_cliente = %s, telefone_cliente = %s, email_cliente = %s
+            WHERE cliente_id = %s;
+            """,
+            (
+                dados_cliente['nome_cliente'], dados_cliente['endereco_cliente'],
+                dados_cliente['gps_latitude_cliente'], dados_cliente['gps_longitude_cliente'],
+                dados_cliente['telefone_cliente'], dados_cliente['email_cliente'],
+                cliente_id
+            )
+        )
+        updated_rows = cur.rowcount
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        if updated_rows > 0:
+            return jsonify({"message": f"Cliente {cliente_id} atualizado com sucesso."})
+        else:
+            return jsonify({"message": "Cliente não encontrado"}), 404
+
+    # --- LÓGICA PARA O MÉTODO DELETE ---
+    elif request.method == 'DELETE':
+        # Primeiro, apaga as entregas associadas
+        cur.execute('DELETE FROM cadeiraextensao.entregas WHERE cliente_id = %s;', (cliente_id,))
+        # Em seguida, apaga o cliente
+        cur.execute('DELETE FROM cadeiraextensao.clientes WHERE cliente_id = %s;', (cliente_id,))
+        
+        updated_rows = cur.rowcount
+        conn.commit()
+        cur.close()
+        conn.close()
+
+        if updated_rows > 0:
+            return jsonify({"message": f"Cliente {cliente_id} e suas dependências foram apagados."})
+        else:
+            return jsonify({"message": "Cliente não encontrado"}), 404
 
 
 # --- Endpoints para Depósitos ---
