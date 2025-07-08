@@ -7,6 +7,26 @@ from decimal import Decimal
 api = Blueprint('api', __name__)
 
 
+# --- Endpoint para a Página Home da API ---
+
+@api.route('/', methods=['GET'])
+def home():
+    """Página inicial da API que lista os recursos disponíveis."""
+    doc = {
+        "message": "Bem-vindo à API do Projeto de Entregas (PCV)",
+        "description": "Esta API gerencia clientes, veículos, rotas e entregas.",
+        "recursos_disponiveis": {
+            "clientes": "/api/clientes",
+            "veiculos": "/api/veiculos",
+            "motoristas": "/api/motoristas",
+            "depositos": "/api/depositos",
+            "rotas": "/api/rotas",
+            "entregas": "/api/entregas"
+        }
+    }
+    return jsonify(doc)
+
+
 # --- Endpoints para Clientes ---
 
 @api.route('/clientes', methods=['GET'])
