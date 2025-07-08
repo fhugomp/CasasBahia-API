@@ -1,12 +1,10 @@
 from flask import Flask
-import json
-from datetime import date, time, datetime
-from decimal import Decimal
 
 def create_app():
+    """Cria e configura uma instância do aplicativo Flask."""
     app = Flask(__name__)
-    app.json_encoder = CustomJSONEncoder
-    
+
+    # Registra o Blueprint que contém as rotas da API
     from .routes import api
     app.register_blueprint(api, url_prefix='/api')
 
