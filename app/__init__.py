@@ -1,5 +1,3 @@
-# app/__init__.py
-
 from flask import Flask
 import json
 from datetime import date, time, datetime
@@ -7,10 +5,6 @@ from decimal import Decimal
 
 class CustomJSONEncoder(json.JSONEncoder):
     def default(self, obj):
-        # --- ADICIONE ESTA LINHA PARA DEPURAR ---
-        print(f"DEBUG: CustomJSONEncoder está processando um objeto do tipo: {type(obj)}")
-        # -----------------------------------------
-
         if isinstance(obj, (datetime, date, time)):
             return obj.isoformat()
         if isinstance(obj, Decimal):
